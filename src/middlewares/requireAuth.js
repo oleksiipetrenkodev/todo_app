@@ -1,4 +1,4 @@
-import { authService } from '../services/authService.js';
+import { authService } from '../../src/services/authService.js';
 
 export function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
