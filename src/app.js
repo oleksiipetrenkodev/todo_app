@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
-import { authService } from '../src/services/authService.js';
-import { requireAuth } from '../src/middlewares/requireAuth.js';
+import { authService } from './services/authService.js';
+import { requireAuth } from './middlewares/requireAuth.js';
 
 const app = express();
 
