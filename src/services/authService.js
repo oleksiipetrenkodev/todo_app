@@ -1,12 +1,8 @@
 import jwt from 'jsonwebtoken';
-
-const users = [
-  { id: 'u1', email: 'oleksii@example.com', password: 'oleksii' },
-  { id: 'u2', email: 'ivan@example.com', password: 'ivan' },
-];
+import { fakeDB } from '../fakeDB/db.js';
 
 function login(email, password) {
-  const found = users.find((user) => user.email === email && user.password === password);
+  const found = fakeDB.getAllUsers().find((user) => user.email === email && user.password === password);
   if (!found) throw Object.assign(new Error('Invalid credentials'), { status: 401 });
 
   const token = jwt.sign({ sub: found.id, email: found.email }, process.env.JWT_SECRET || 'dev', { expiresIn: '1h' });
