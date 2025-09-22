@@ -1,7 +1,10 @@
-import { authService } from '../../src/services/authService.js';
+import { isPublicPath } from '../config/publicPaths.js';
 import { fakeDB } from '../fakeDB/db.js';
+import { authService } from '../services/authService.js';
 
-export function requireAuth(req, res, next) {
+export async function authGate(req, res, next) {
+  if (isPublicPath(req.path)) return next();
+
   const header = req.headers.authorization || '';
   if (!header.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Missing token' });
@@ -12,7 +15,7 @@ export function requireAuth(req, res, next) {
   let payload;
   try {
     payload = authService.verify(token);
-  } catch (err) {
+  } catch (error) {
     return res.status(401).json({ error: 'Invalid token' });
   }
 

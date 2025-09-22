@@ -1,33 +1,23 @@
 import express from 'express';
 import cors from 'cors';
-import { authService } from './services/authService.js';
-import { requireAuth } from './middlewares/requireAuth.js';
+import { authGate } from './middlewares/authGate.js';
+import { publicRouter } from './routes/public.js';
+import { privateRoute } from './routes/private.js';
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-app.post('/login', async (req, res, next) => {
-  try {
-    const { email, password } = req.body ?? {};
-    const token = await authService.login(email, password);
-    res.json({ token });
-  } catch (err) {
-    next(err);
-  }
-});
+// Global gate goes BEFORE routers,
+// but it lets public paths pass through
+app.use(authGate);
 
-app.get('/api/v1/tasks', requireAuth, (_req, res) => {
-  res.json([
-    { id: 1, title: 'Sample task', completed: false },
-    { id: 2, title: 'Another task', completed: true },
-  ]);
-});
+// Public routes
+app.use(publicRouter);
 
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok' });
-});
+// Private routes
+app.use(privateRoute);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found', path: req.originalUrl });
