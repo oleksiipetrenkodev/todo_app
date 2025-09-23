@@ -1,10 +1,15 @@
 import { Router } from 'express';
+import { getDb } from '../db.js';
 
 export const privateRoute = Router();
 
-privateRoute.get('/api/v1/tasks', (_req, res) => {
-  res.json([
-    { id: 1, title: 'Sample task', completed: false },
-    { id: 2, title: 'Another task', completed: true },
-  ]);
+privateRoute.get('/tasks', async (_req, res, next) => {
+  try {
+    const db = await getDb();
+    const tasks = await db.collection('tasks').find({}).sort({ _id: -1 }).toArray();
+
+    res.json(tasks);
+  } catch (err) {
+    next(err);
+  }
 });

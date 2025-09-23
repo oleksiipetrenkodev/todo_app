@@ -13,6 +13,7 @@ publicRouter.post('/login', async (req, res, next) => {
   }
 });
 
+// Just for testing
 publicRouter.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
