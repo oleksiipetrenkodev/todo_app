@@ -12,6 +12,6 @@ for (const envVar of requiredEnvVars) {
 
 export const config = {
   jwtSecret: process.env.JWT_SECRET,
-  port: Number(process.env.PORT) || 3000,
+  port: process.env.PORT,
   mongodbUri: process.env.MONGODB_URI,
 };

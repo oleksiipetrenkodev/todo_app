@@ -1,18 +1,40 @@
-import { MongoClient, Db } from 'mongodb';
+// db.js
+import mongoose from 'mongoose';
 import { config } from './config/env.js';
 
-const uri = config.mongodbUri;
-const client = new MongoClient(uri);
+let connectPromise = null;
+let listenersBound = false;
 
-let cachedDb = null;
+function bindResetters() {
+  if (listenersBound) return;
+  listenersBound = true;
+  mongoose.connection.on('disconnected', () => {
+    connectPromise = null;
+  });
+  mongoose.connection.on('error', () => {
+    connectPromise = null;
+  });
+}
 
-export async function getDb() {
-  if (cachedDb) return cachedDb;
-  await client.connect();
-  cachedDb = client.db();
-  return cachedDb;
+export async function connectToDb(uri = config.mongodbUri) {
+  if (mongoose.connection.readyState === 1) return mongoose;
+  if (connectPromise) return await connectPromise;
+  bindResetters();
+  try {
+    connectPromise = mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
+    const m = await connectPromise;
+    console.log('✅ Connected to MongoDB via Mongoose');
+    return m;
+  } catch (err) {
+    connectPromise = null;
+    throw err;
+  }
 }
 
 export async function closeDb() {
-  await client.close();
+  if (mongoose.connection.readyState !== 0) {
+    await mongoose.disconnect();
+    connectPromise = null;
+    console.log('🔌 Disconnected from MongoDB');
+  }
 }

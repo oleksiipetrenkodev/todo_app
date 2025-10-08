@@ -1,12 +1,11 @@
 import { Router } from 'express';
-import { getDb } from '../db.js';
+import { Task } from '../models/tasks.js';
 
 export const privateRoute = Router();
 
 privateRoute.get('/tasks', async (_req, res, next) => {
   try {
-    const db = await getDb();
-    const tasks = await db.collection('tasks').find({}).sort({ _id: -1 }).toArray();
+    const tasks = await Task.find({}).sort({ _id: -1 }).lean();
 
     res.json(tasks);
   } catch (err) {

@@ -20,7 +20,7 @@
     "dotenv": "^17.2.2",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
-    "mongodb": "^6.20.0"
+    "mongoose": "^8.19.1"
   },
   "devDependencies": {
     "@jest/globals": "29.7.0",
