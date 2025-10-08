@@ -55,7 +55,7 @@ describe('requireAuth middleware', () => {
     requireAuth(req, res, next);
 
     expect(verifyMock).toHaveBeenCalledWith('VALID.JWT');
-    expect(req.user).toEqual({ sub: 'u1', email: 'oleksii@example.com' });
+    expect(req.user).toEqual({ id: 'u1', email: 'oleksii@example.com' });
     expect(next).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
   });
