@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: todo-mongo
+    ports:
+      - '27017:27017'
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpass
+      MONGO_INITDB_DATABASE: todo_app
+    volumes:
+      - mongo-data:/data/db
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+
+  backend:
+    build: .
+    container_name: todo-backend
+    depends_on:
+      - mongo
+    ports:
+      - '3000:3000'
+    environment:
+      PORT: '3000'
+      MONGODB_URI: 'mongodb://todo_user:1@mongo:27017/todo_app?authSource=todo_app'
+      JWT_SECRET: 'MY_SUPER_SECRET_KEY'
+    volumes:
+      - .:/app
+      - /app/node_modules
+
+volumes:
+  mongo-data:
