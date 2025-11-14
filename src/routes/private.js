@@ -11,9 +11,27 @@ const serializeTask = (task) => ({
 
 export const privateRoute = Router();
 
-privateRoute.get('/tasks', async (_req, res, next) => {
+privateRoute.get('/tasks', async (req, res, next) => {
   try {
-    const tasks = await Task.find({}).sort({ _id: -1 }).lean();
+    const { title, date, status } = req.query;
+
+    const filter = {};
+
+    if (title) {
+      filter.title = { $regex: title, $options: 'i' };
+    }
+
+    if (date) {
+      filter.createdAt = {
+        $gte: new Date(date + 'T00:00:00.000Z'),
+        $lte: new Date(date + 'T23:59:59.999Z'),
+      };
+    }
+
+    if (status === 'active') filter.completed = false;
+    if (status === 'done') filter.completed = true;
+
+    const tasks = await Task.find(filter).sort({ _id: -1 }).lean();
 
     res.json(tasks.map(serializeTask));
   } catch (err) {
