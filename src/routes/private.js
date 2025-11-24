@@ -76,3 +76,19 @@ privateRoute.put('/edit-task/:id', async (req, res, next) => {
     next(err);
   }
 });
+
+privateRoute.delete('/delete-task/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const task = await Task.findByIdAndDelete(id);
+
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    res.json({ message: 'Task deleted' });
+  } catch (err) {
+    next(err);
+  }
+});
