@@ -54,11 +54,21 @@ import { closeDb, connectToDb } from './db.js';
       return arr[Math.floor(Math.random() * arr.length)];
     }
 
+    const tokenize = (title) =>
+      title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+
     const tasks = Array.from({ length: 250 }).map((_, i) => {
       const createdAt = randomDateWithinFourYears();
+      const title = randomItem(titles) + ` (#${i + 1})`;
 
       return {
-        title: randomItem(titles) + ` (#${i + 1})`,
+        title,
+        titleTokens: tokenize(title),
         description: randomItem(descriptions),
         completed: Math.random() > 0.5,
         createdAt,
