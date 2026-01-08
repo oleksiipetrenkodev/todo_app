@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { Task } from '../models/tasks.js';
 
-import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { Upload } from '@aws-sdk/lib-storage';
+import Busboy from 'busboy';
 import { v4 as uuid } from 'uuid';
 import { s3 } from '../s3.js';
 
@@ -127,45 +129,118 @@ privateRoute.delete('/delete-task/:id', async (req, res, next) => {
   }
 });
 
-privateRoute.post('/tasks/:id/attachments/presign', async (req, res, next) => {
-  try {
-    const { filename, contentType } = req.body || {};
-    if (!ALLOWED.includes(contentType)) return res.sendStatus(400);
-
-    const task = await Task.findById(req.params.id).select('_id');
-    if (!task) return res.sendStatus(404);
-
-    const key = `tasks/${req.params.id}/${uuid()}-${safeFilename(filename)}`;
-
-    const putObjectCommand = new PutObjectCommand({
-      Bucket: process.env.AWS_S3_BUCKET,
-      Key: key,
-      ContentType: contentType,
-    });
-
-    const uploadUrl = await getSignedUrl(s3, putObjectCommand, { expiresIn: 60 });
-    res.json({ uploadUrl, key });
-  } catch (err) {
-    console.error('PRESIGN ERROR:', err);
-    res.status(500).json({ error: String(err?.message || err) });
-  }
-});
-
 privateRoute.post('/tasks/:id/attachments', async (req, res, next) => {
   try {
-    const { key, name, size, contentType } = req.body || {};
-
-    if (!key || !name || !contentType || typeof size !== 'number') return res.sendStatus(400);
-    if (!ALLOWED.includes(contentType)) return res.sendStatus(400);
-    if (size > MAX_SIZE) return res.sendStatus(413);
-
     const task = await Task.findById(req.params.id);
-    if (!task) return res.sendStatus(404);
 
-    task.attachments.push({ key, name, size, contentType });
-    await task.save();
+    if (!task) {
+      req.resume();
+      return res.sendStatus(404);
+    }
 
-    res.status(201).json(serializeTask(task));
+    const busboy = Busboy({
+      headers: req.headers,
+      limits: { files: 1, fileSize: MAX_SIZE },
+    });
+
+    let fileSeen = false;
+    let uploadPromise = null;
+    let upload = null;
+    let fileSize = 0;
+    let fileMeta = null;
+    let responded = false;
+    let streamError = null;
+
+    const sendOnce = (status, payload) => {
+      if (responded) return;
+      responded = true;
+      if (payload) return res.status(status).json(payload);
+      return res.sendStatus(status);
+    };
+
+    busboy.on('file', (fieldname, file, info) => {
+      if (fileSeen) {
+        file.resume();
+        streamError = streamError || { status: 400 };
+        return;
+      }
+
+      fileSeen = true;
+      const contentType = info?.mimeType;
+      const originalName = info?.filename || 'file';
+
+      if (!ALLOWED.includes(contentType)) {
+        file.resume();
+        streamError = streamError || { status: 400 };
+        return;
+      }
+
+      const key = `tasks/${req.params.id}/${uuid()}-${safeFilename(originalName)}`;
+      fileMeta = { key, name: originalName, contentType };
+
+      upload = new Upload({
+        client: s3,
+        params: {
+          Bucket: process.env.AWS_S3_BUCKET,
+          Key: key,
+          Body: file,
+          ContentType: contentType,
+        },
+      });
+
+      uploadPromise = upload.done().catch((err) => {
+        // swallow abort error; keep other errors
+        if (err?.name === 'AbortError' || String(err?.message).includes('aborted')) return;
+        throw err;
+      });
+
+      file.on('data', (chunk) => {
+        console.log('data', chunk.length);
+        fileSize += chunk.length;
+      });
+
+      file.on('limit', () => {
+        console.log('limit');
+        streamError = streamError || { status: 413 };
+        if (upload) upload.abort();
+      });
+    });
+
+    busboy.on('error', (err) => {
+      console.log('error', err);
+      streamError = streamError || { status: 400, err };
+    });
+
+    busboy.on('filesLimit', () => {
+      streamError = streamError || { status: 400 };
+    });
+
+    busboy.on('finish', async () => {
+      try {
+        if (!fileSeen) return sendOnce(400);
+        if (streamError?.status) {
+          if (uploadPromise) await uploadPromise;
+          return sendOnce(streamError.status);
+        }
+        if (!uploadPromise || !fileMeta) return sendOnce(400);
+
+        await uploadPromise;
+
+        task.attachments.push({
+          key: fileMeta.key,
+          name: fileMeta.name,
+          size: fileSize,
+          contentType: fileMeta.contentType,
+        });
+        await task.save();
+
+        return sendOnce(201, serializeTask(task));
+      } catch (err) {
+        return next(err);
+      }
+    });
+
+    req.pipe(busboy);
   } catch (err) {
     next(err);
   }
