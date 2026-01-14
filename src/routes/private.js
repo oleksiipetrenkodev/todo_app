@@ -7,28 +7,9 @@ import { Upload } from '@aws-sdk/lib-storage';
 import Busboy from 'busboy';
 import { v4 as uuid } from 'uuid';
 import { s3 } from '../s3.js';
-
-const serializeTask = (task) => ({
-  id: task._id.toString(),
-  title: task.title,
-  description: task.description,
-  completed: task.completed,
-  createdAt: task.createdAt,
-  attachments: (task.attachments || []).map((attachment) => ({
-    key: attachment.key,
-    name: attachment.name,
-    size: attachment.size,
-    contentType: attachment.contentType,
-    createdAt: attachment.createdAt,
-  })),
-});
-
-const ALLOWED = ['image/jpeg', 'image/png', 'image/webp'];
-
-// 20MB
-const MAX_SIZE = 20 * 1024 * 1024;
-
-const safeFilename = (name) => String(name || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+import { serializeTask } from '../utils/serializeTask.js';
+import { safeFilename } from '../utils/safeFilename.js';
+import { ALLOWED_MIME_TYPES, MAX_UPLOAD_SIZE } from '../utils/upload.constants.js';
 
 export const privateRoute = Router();
 
@@ -140,7 +121,7 @@ privateRoute.post('/tasks/:id/attachments', async (req, res, next) => {
 
     const busboy = Busboy({
       headers: req.headers,
-      limits: { files: 1, fileSize: MAX_SIZE },
+      limits: { files: 1, fileSize: MAX_UPLOAD_SIZE },
     });
 
     let fileSeen = false;
@@ -169,7 +150,7 @@ privateRoute.post('/tasks/:id/attachments', async (req, res, next) => {
       const contentType = info?.mimeType;
       const originalName = info?.filename || 'file';
 
-      if (!ALLOWED.includes(contentType)) {
+      if (!ALLOWED_MIME_TYPES.includes(contentType)) {
         file.resume();
         streamError = streamError || { status: 400 };
         return;
