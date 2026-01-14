@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { authGate } from './middlewares/authGate.js';
 import { publicRouter } from './routes/public.js';
-import { privateRoute } from './routes/private.js';
+import { privateRoute } from './routes/private.route.js';
 
 const app = express();
 
