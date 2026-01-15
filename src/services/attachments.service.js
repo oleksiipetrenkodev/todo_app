@@ -2,6 +2,7 @@ import { GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Upload } from '@aws-sdk/lib-storage';
 import Busboy from 'busboy';
+import sharp from 'sharp';
 import { v4 as uuid } from 'uuid';
 import { s3 } from '../s3.js';
 import { safeFilename } from '../utils/safeFilename.js';
@@ -17,58 +18,52 @@ export const uploadSingleAttachment = ({ req, taskId }) =>
   new Promise((resolve, reject) => {
     const busboy = Busboy({
       headers: req.headers,
-      limits: { files: 1, fileSize: MAX_UPLOAD_SIZE },
+      limits: {
+        files: 1,
+        fileSize: MAX_UPLOAD_SIZE,
+      },
     });
 
+    // Відстежуємо, чи вже був оброблений файл
     let fileSeen = false;
-    let uploadPromise = null;
-    let upload = null;
-    let fileSize = 0;
     let fileMeta = null;
     let streamError = null;
+    let chunks = [];
+    let originalName = null;
+    let inputContentType = null;
 
-    busboy.on('file', (fieldname, file, info) => {
+    busboy.on('file', (_fieldname, file, info) => {
       if (fileSeen) {
-        file.resume();
+        file.resume(); // дочитується стрім, завершення запиту
         streamError = streamError || { status: 400 };
         return;
       }
 
       fileSeen = true;
-      const contentType = info?.mimeType;
-      const originalName = info?.filename || 'file';
 
-      if (!ALLOWED_MIME_TYPES.includes(contentType)) {
+      inputContentType = info?.mimeType;
+      originalName = info?.filename || 'file';
+
+      if (!ALLOWED_MIME_TYPES.includes(inputContentType)) {
         file.resume();
         streamError = streamError || { status: 400 };
         return;
       }
 
-      const key = `tasks/${taskId}/${uuid()}-${safeFilename(originalName)}`;
-      fileMeta = { key, name: originalName, contentType };
-
-      upload = new Upload({
-        client: s3,
-        params: {
-          Bucket: process.env.AWS_S3_BUCKET,
-          Key: key,
-          Body: file,
-          ContentType: contentType,
-        },
-      });
-
-      uploadPromise = upload.done().catch((err) => {
-        if (err?.name === 'AbortError' || String(err?.message).includes('aborted')) return;
-        throw err;
-      });
-
       file.on('data', (chunk) => {
-        fileSize += chunk.length;
+        chunks.push(chunk);
       });
 
       file.on('limit', () => {
+        // HTTP 413 Content Too Large
         streamError = streamError || { status: 413 };
-        if (upload) upload.abort();
+
+        file.resume();
+      });
+
+      // Помилка файлового стріму → некоректний запит.
+      file.on('error', (err) => {
+        streamError = streamError || { status: 400, err };
       });
     });
 
@@ -76,29 +71,72 @@ export const uploadSingleAttachment = ({ req, taskId }) =>
       streamError = streamError || { status: 400, err };
     });
 
+    // Якщо прийшло більше файлів, ніж дозволено.
     busboy.on('filesLimit', () => {
       streamError = streamError || { status: 400 };
     });
 
+    // Викликається, коли Busboy завершив парсинг тіла запиту.
     busboy.on('finish', async () => {
       try {
         if (!fileSeen) return reject(createStatusError(400));
+
         if (streamError?.status) {
-          if (uploadPromise) await uploadPromise;
           return reject(createStatusError(streamError.status, streamError.err));
         }
-        if (!uploadPromise || !fileMeta) return reject(createStatusError(400));
 
-        await uploadPromise;
+        if (!chunks.length || !originalName) return reject(createStatusError(400));
+
+        const inputBuffer = Buffer.concat(chunks);
+        console.log({ inputBuffer });
+
+        // Трансформація:
+        // 1) resize для зменшення розміру (обмеження ширини, збереження пропорцій)
+        // 2) конвертація у webp
+        // 3) toBuffer() повертає фінальні байти для збереження в S3
+        const webpBuffer = await sharp(inputBuffer)
+          .resize({
+            width: 1280,
+            withoutEnlargement: true,
+          })
+          .webp({
+            quality: 80,
+          })
+          .toBuffer();
+
+        console.log({ webpBuffer });
+
+        const key = `tasks/${taskId}/${uuid()}-${safeFilename(originalName)}.webp`;
+
+        // Дані для зьерігання в БД
+        fileMeta = {
+          key,
+          name: originalName,
+          contentType: 'image/webp',
+        };
+
+        const upload = new Upload({
+          client: s3,
+          params: {
+            Bucket: process.env.AWS_S3_BUCKET,
+            Key: key,
+            Body: webpBuffer,
+            ContentType: 'image/webp',
+          },
+        });
+
+        await upload.done();
 
         return resolve({
           key: fileMeta.key,
           name: fileMeta.name,
-          size: fileSize,
+          size: webpBuffer.length,
           contentType: fileMeta.contentType,
         });
       } catch (err) {
         return reject(err);
+      } finally {
+        chunks = [];
       }
     });
 
@@ -123,7 +161,7 @@ export const deleteS3Object = async (key) => {
   );
 };
 
-export const deleteS3Objects = async (keys) => {
+export const deleteAllS3Objects = async (keys) => {
   return Promise.allSettled(
     keys.map((key) =>
       s3.send(

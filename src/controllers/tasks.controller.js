@@ -1,16 +1,10 @@
 import { serializeTask } from '../utils/serializeTask.js';
-import {
-  listTasks,
-  createTask,
-  updateTask,
-  getTaskById,
-  deleteTaskById,
-} from '../services/tasks.service.js';
+import { listTasks, createTask, updateTask, getTaskById, deleteTaskById } from '../services/tasks.service.js';
 import {
   uploadSingleAttachment,
   presignGet,
   deleteS3Object,
-  deleteS3Objects,
+  deleteAllS3Objects,
 } from '../services/attachments.service.js';
 
 export const getTasks = async (req, res, next) => {
@@ -70,7 +64,7 @@ export const deleteTask = async (req, res, next) => {
 
     const keys = (task.attachments || []).map((a) => a.key).filter(Boolean);
 
-    await deleteS3Objects(keys);
+    await deleteAllS3Objects(keys);
 
     await deleteTaskById(id);
 
