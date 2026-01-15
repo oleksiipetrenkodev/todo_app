@@ -88,7 +88,6 @@ export const uploadSingleAttachment = ({ req, taskId }) =>
         if (!chunks.length || !originalName) return reject(createStatusError(400));
 
         const inputBuffer = Buffer.concat(chunks);
-        console.log({ inputBuffer });
 
         // Трансформація:
         // 1) resize для зменшення розміру (обмеження ширини, збереження пропорцій)
@@ -103,8 +102,6 @@ export const uploadSingleAttachment = ({ req, taskId }) =>
             quality: 80,
           })
           .toBuffer();
-
-        console.log({ webpBuffer });
 
         const key = `tasks/${taskId}/${uuid()}-${safeFilename(originalName)}.webp`;
 
