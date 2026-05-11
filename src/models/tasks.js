@@ -13,9 +13,9 @@ const attachmentSchema = new mongoose.Schema(
 
 const taskSchema = new mongoose.Schema(
   {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     title: { type: String, required: true },
-    // titleLower: { type: String, required: true, index: true }, // для префікс пошуку
-    titleTokens: { type: [String], required: true, index: true }, // для пошуку всередині слова
+    titleTokens: { type: [String], required: true, index: true },
     description: { type: String, default: '' },
     completed: { type: Boolean, default: false, required: true },
     attachments: { type: [attachmentSchema], default: [] },
@@ -23,13 +23,6 @@ const taskSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// Якщо префікс пошук
-// taskSchema.pre('validate', function (next) {
-//   if (this.title) this.titleLower = this.title.toLowerCase();
-//   next();
-// });
-
-// Для пошуку всередині слова
 taskSchema.pre('validate', function (next) {
   if (this.title) {
     const lowerCaseTitle = this.title.toLowerCase();
@@ -43,7 +36,7 @@ taskSchema.pre('validate', function (next) {
   next();
 });
 
-taskSchema.index({ completed: 1, createdAt: -1, _id: -1 });
-taskSchema.index({ createdAt: -1, _id: -1 });
+taskSchema.index({ userId: 1, completed: 1, createdAt: -1, _id: -1 });
+taskSchema.index({ userId: 1, createdAt: -1, _id: -1 });
 
 export const Task = mongoose.model('Task', taskSchema);

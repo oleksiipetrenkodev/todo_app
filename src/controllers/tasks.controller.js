@@ -9,7 +9,7 @@ import {
 
 export const getTasks = async (req, res, next) => {
   try {
-    const tasks = await listTasks(req.query);
+    const tasks = await listTasks({ ...req.query, userId: req.user.id });
     res.json(tasks.map(serializeTask));
   } catch (err) {
     next(err);
@@ -24,8 +24,8 @@ export const postCreateTask = async (req, res, next) => {
       title: title.trim(),
       description: description.trim(),
       completed,
+      userId: req.user.id,
     });
-
     res.status(201).json(serializeTask(task));
   } catch (err) {
     next(err);
@@ -42,11 +42,9 @@ export const putEditTask = async (req, res, next) => {
     if (description !== undefined) updateData.description = description.trim();
     if (completed !== undefined) updateData.completed = completed;
 
-    const task = await updateTask(id, updateData);
+    const task = await updateTask(id, updateData, req.user.id);
 
-    if (!task) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
+    if (!task) return res.status(404).json({ error: 'Task not found' });
 
     res.json(serializeTask(task));
   } catch (err) {
@@ -58,7 +56,7 @@ export const deleteTask = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const task = await getTaskById(id, 'attachments');
+    const task = await getTaskById(id, req.user.id, 'attachments');
 
     if (!task) return res.status(404).json({ error: 'Task not found' });
 
@@ -66,7 +64,7 @@ export const deleteTask = async (req, res, next) => {
 
     await deleteAllS3Objects(keys);
 
-    await deleteTaskById(id);
+    await deleteTaskById(id, req.user.id);
 
     res.sendStatus(204);
   } catch (err) {
@@ -76,7 +74,7 @@ export const deleteTask = async (req, res, next) => {
 
 export const postTaskAttachment = async (req, res, next) => {
   try {
-    const task = await getTaskById(req.params.id);
+    const task = await getTaskById(req.params.id, req.user.id);
 
     if (!task) {
       req.resume();
@@ -112,7 +110,7 @@ export const getTaskAttachmentPresign = async (req, res, next) => {
 
     const key = decodeURIComponent(String(rawKey));
 
-    const task = await getTaskById(req.params.id, 'attachments');
+    const task = await getTaskById(req.params.id, req.user.id, 'attachments');
     if (!task) return res.sendStatus(404);
 
     const exists = task.attachments.some((a) => a.key === key);
@@ -132,7 +130,7 @@ export const deleteTaskAttachment = async (req, res, next) => {
 
     const key = decodeURIComponent(String(rawKey));
 
-    const task = await getTaskById(req.params.id);
+    const task = await getTaskById(req.params.id, req.user.id);
     if (!task) return res.sendStatus(404);
 
     const idx = task.attachments.findIndex((a) => a.key === key);

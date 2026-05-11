@@ -1,7 +1,7 @@
 import { Task } from '../models/tasks.js';
 
-export const listTasks = async ({ title, date, status } = {}) => {
-  const filter = {};
+export const listTasks = async ({ title, date, status, userId } = {}) => {
+  const filter = { userId };
 
   if (title) {
     const token = String(title).toLowerCase().trim();
@@ -21,27 +21,20 @@ export const listTasks = async ({ title, date, status } = {}) => {
   return Task.find(filter).sort({ _id: -1 }).lean();
 };
 
-export const createTask = async ({ title, description, completed }) => {
-  return Task.create({
-    title,
-    description,
-    completed,
-  });
+export const createTask = async ({ title, description, completed, userId }) => {
+  return Task.create({ title, description, completed, userId });
 };
 
-export const updateTask = async (id, updateData) => {
-  return Task.findByIdAndUpdate(id, updateData, {
-    new: true,
-    runValidators: true,
-  });
+export const updateTask = async (id, updateData, userId) => {
+  return Task.findOneAndUpdate({ _id: id, userId }, updateData, { new: true, runValidators: true });
 };
 
-export const getTaskById = async (id, select) => {
-  const query = Task.findById(id);
+export const getTaskById = async (id, userId, select) => {
+  const query = Task.findOne({ _id: id, userId });
   if (select) query.select(select);
   return query;
 };
 
-export const deleteTaskById = async (id) => {
-  return Task.findByIdAndDelete(id);
+export const deleteTaskById = async (id, userId) => {
+  return Task.findOneAndDelete({ _id: id, userId });
 };

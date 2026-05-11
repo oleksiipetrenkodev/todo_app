@@ -22,7 +22,7 @@ async function shutdown(signal) {
   if (server.listening) {
     try {
       await new Promise((resolve, reject) => {
-        server.close(err => (err ? reject(err) : resolve()));
+        server.close((err) => (err ? reject(err) : resolve()));
       });
       console.log('HTTP server closed');
     } catch (err) {
@@ -42,7 +42,7 @@ async function shutdown(signal) {
   process.exit(exitCode);
 }
 
-['SIGINT', 'SIGTERM'].forEach(signal => {
+['SIGINT', 'SIGTERM'].forEach((signal) => {
   process.on(signal, () => {
     void shutdown(signal);
   });

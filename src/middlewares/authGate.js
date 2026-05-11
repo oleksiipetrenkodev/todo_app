@@ -1,5 +1,5 @@
 import { isPublicPath } from '../config/publicPaths.js';
-import { fakeDB } from '../fakeDB/db.js';
+import { User } from '../models/User.js';
 import { authService } from '../services/authService.js';
 
 export async function authGate(req, res, next) {
@@ -15,15 +15,13 @@ export async function authGate(req, res, next) {
   let payload;
   try {
     payload = authService.verify(token);
-  } catch (error) {
+  } catch {
     return res.status(401).json({ error: 'Invalid token' });
   }
 
-  const user = fakeDB.getUserById(payload.sub);
-  if (!user) {
-    return res.status(401).json({ error: 'Not authorized' });
-  }
+  const user = await User.findById(payload.sub).lean();
+  if (!user) return res.status(401).json({ error: 'Not authorized' });
 
-  req.user = { id: user.id, email: user.email };
+  req.user = { id: user._id, email: user.email };
   next();
 }
